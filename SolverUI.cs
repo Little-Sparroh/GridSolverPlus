@@ -37,10 +37,15 @@ public class SolverUI
     private readonly InputAction _addForSolve;
 
     private bool _barRegistered;
+    private bool _lastSolveEnabled;
+    private bool _lastCancelEnabled;
+    private bool _lastClearEnabled;
+    private bool _buttonStateInitialized;
 
     public SolverUI(IUpgradeWindow? upgradeWindow, IUpgradable? currentGear)
 
     {
+
         UpgradeWindow = upgradeWindow;
         CurrentGear = currentGear;
 
@@ -218,13 +223,26 @@ public class SolverUI
             return;
 
         bool solving = UpgradeSolver.Instance != null && UpgradeSolver.Instance.SolverCoroutine != null;
-        GearActionBar.SetSlotVisible("solve", true);
-        GearActionBar.SetSlotVisible("cancel_solve", true);
-        GearActionBar.SetSlotVisible("clear_selection", true);
-        GearActionBar.SetInteractable("solve", _solveButtonEnabled && !solving);
-        GearActionBar.SetInteractable("cancel_solve", solving);
-        GearActionBar.SetInteractable("clear_selection", _selectedUpgrades.Count > 0 && !solving);
+        bool solveEnabled = _solveButtonEnabled && !solving;
+        bool cancelEnabled = solving;
+        bool clearEnabled = _selectedUpgrades.Count > 0 && !solving;
+
+        if (_buttonStateInitialized
+            && solveEnabled == _lastSolveEnabled
+            && cancelEnabled == _lastCancelEnabled
+            && clearEnabled == _lastClearEnabled)
+            return;
+
+        _buttonStateInitialized = true;
+        _lastSolveEnabled = solveEnabled;
+        _lastCancelEnabled = cancelEnabled;
+        _lastClearEnabled = clearEnabled;
+
+        GearActionBar.SetInteractable("solve", solveEnabled);
+        GearActionBar.SetInteractable("cancel_solve", cancelEnabled);
+        GearActionBar.SetInteractable("clear_selection", clearEnabled);
     }
+
 
 
 
