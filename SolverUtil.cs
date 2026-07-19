@@ -372,7 +372,7 @@ public class Solver
     private void SnapshotEquipped()
     {
         _previousLayout.Clear();
-        foreach (var inst in EnumerateInstances(_gear))
+        foreach (var inst in _upgrades)
         {
             if (!inst.IsEquipped(_gear)) continue;
             if (inst.GetPosition(_gear, out sbyte x, out sbyte y))
@@ -398,10 +398,7 @@ public class Solver
     {
         if (_equipSlots == null) return;
 
-        var instances = EnumerateInstances(_gear)
-            .OrderBy(i => GetPlacementPriority(i))
-            .ToList();
-        foreach (var upgradeInstance in instances)
+        foreach (var upgradeInstance in _upgrades.OrderBy(i => GetPlacementPriority(i)))
         {
             _equipSlots.Unequip(_gear, upgradeInstance);
         }
