@@ -2,10 +2,11 @@
 
     <PropertyGroup>
         <TargetFramework>net48</TargetFramework>
-        <AssemblyName>GridSolverPlus</AssemblyName>
-        <Product>GridSolverPlus</Product>
+        <AssemblyName>GridSolverCoru</AssemblyName>
+        <Product>GridSolverCoru</Product>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
         <LangVersion>latest</LangVersion>
+        <Nullable>disable</Nullable>
         <RestoreAdditionalProjectSources>
             https://api.nuget.org/v3/index.json;
             https://nuget.bepinex.dev/v3/index.json;
@@ -38,36 +39,44 @@
 
     <ItemGroup>
       <Reference Include="0Harmony">
-        <HintPath>..\..\..\AppData\Roaming\r2modmanPlus-local\Mycopunk\profiles\Default\BepInEx\core\0Harmony.dll</HintPath>
+        <HintPath>libs/0Harmony.dll</HintPath>
+        <Private>false</Private>
       </Reference>
       <Reference Include="Assembly-CSharp">
-        <HintPath>..\..\..\..\..\Program Files (x86)\Steam\steamapps\common\Mycopunk\Mycopunk_Data\Managed\Assembly-CSharp.dll</HintPath>
+        <HintPath>libs/Assembly-CSharp.dll</HintPath>
+        <Private>false</Private>
       </Reference>
       <Reference Include="Unity.InputSystem">
-        <HintPath>..\..\..\..\..\Program Files (x86)\Steam\steamapps\common\Mycopunk\Mycopunk_Data\Managed\Unity.InputSystem.dll</HintPath>
+        <HintPath>libs/Unity.InputSystem.dll</HintPath>
+        <Private>false</Private>
       </Reference>
       <Reference Include="Unity.Netcode.Runtime">
-        <HintPath>..\..\..\..\..\Program Files (x86)\Steam\steamapps\common\Mycopunk\Mycopunk_Data\Managed\Unity.Netcode.Runtime.dll</HintPath>
+        <HintPath>libs/Unity.Netcode.Runtime.dll</HintPath>
+        <Private>false</Private>
       </Reference>
       <Reference Include="Unity.TextMeshPro">
-        <HintPath>..\..\..\..\..\Program Files (x86)\Steam\steamapps\common\Mycopunk\Mycopunk_Data\Managed\Unity.TextMeshPro.dll</HintPath>
+        <HintPath>libs/Unity.TextMeshPro.dll</HintPath>
+        <Private>false</Private>
       </Reference>
       <Reference Include="UnityEngine.CoreModule">
-        <HintPath>..\..\..\..\..\Program Files (x86)\Steam\steamapps\common\Mycopunk\Mycopunk_Data\Managed\UnityEngine.CoreModule.dll</HintPath>
+        <HintPath>libs/UnityEngine.CoreModule.dll</HintPath>
+        <Private>false</Private>
       </Reference>
       <Reference Include="UnityEngine.InputModule">
-        <HintPath>..\..\..\..\..\Program Files (x86)\Steam\steamapps\common\Mycopunk\Mycopunk_Data\Managed\UnityEngine.InputModule.dll</HintPath>
+        <HintPath>libs/UnityEngine.InputModule.dll</HintPath>
+        <Private>false</Private>
       </Reference>
       <Reference Include="UnityEngine.UI">
-        <HintPath>..\..\..\..\..\Program Files (x86)\Steam\steamapps\common\Mycopunk\Mycopunk_Data\Managed\UnityEngine.UI.dll</HintPath>
+        <HintPath>libs/UnityEngine.UI.dll</HintPath>
+        <Private>false</Private>
       </Reference>
       <Reference Include="UnityEngine.UIModule">
-        <HintPath>..\..\..\..\..\Program Files (x86)\Steam\steamapps\common\Mycopunk\Mycopunk_Data\Managed\UnityEngine.UIModule.dll</HintPath>
+        <HintPath>libs/UnityEngine.UIModule.dll</HintPath>
+        <Private>false</Private>
       </Reference>
       <Reference Include="SparrohUILib">
-        <HintPath>..\..\..\AppData\Roaming\r2modmanPlus-local\Mycopunk\profiles\Default\BepInEx\plugins\Sparroh-SparrohUILib\SparrohUILib.dll</HintPath>
+        <HintPath>libs/SparrohUILib.dll</HintPath>
         <Private>false</Private>
       </Reference>
     </ItemGroup>
 </Project>
-

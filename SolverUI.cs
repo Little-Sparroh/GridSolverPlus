@@ -406,7 +406,8 @@ public class SolverUI
 
         var upgrades = _selectedUpgrades
             .Select(u => u.Value.Upgrade)
-            .OrderByDescending(u => u.Upgrade.Name == "Boundary Incursion" ? int.MaxValue : u.GetPattern().GetCellCount())
+            .OrderByDescending(u => Solver.GetPlacementPriority(u.Upgrade))
+            .ThenByDescending(u => u.GetPattern().GetCellCount())
             .ToList();
 
         // Note: no fit check here. The old pre-check ran against the still-occupied
@@ -498,11 +499,12 @@ public class SolverUI
             return;
         }
 
-        // Unequip grid-expanding upgrades last so removing them doesn't strand
+        // Unequip normal upgrades first, then cell-count modifiers (HPU),
+        // then grid-expanders (BI, MT) last so removing them doesn't strand
         // other mods in cells that stop existing.
         var equipped = Solver.EnumerateInstances(CurrentGear)
             .Where(inst => inst.IsEquipped(CurrentGear))
-            .OrderBy(inst => inst.Upgrade.Name == "Boundary Incursion" ? 1 : 0)
+            .OrderBy(inst => Solver.GetPlacementPriority(inst))
             .ToList();
 
         var removed = 0;
