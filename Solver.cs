@@ -19,6 +19,11 @@ public class UpgradeSolver
 
     internal void OnUpgradeWindowOpen(IUpgradeWindow window, IUpgradable gear, MonoBehaviour mono)
     {
+        // Drop any selection left over from a previous window/gear. If a close
+        // event was ever missed, this prevents old selections from being solved
+        // onto (and equipped on) a different piece of gear.
+        SolverUI.ResetSelectionState();
+
         SolverUI.UpgradeWindow = window;
         SolverUI.CurrentGear = gear;
         SolverUI.OnWindowOpened();
