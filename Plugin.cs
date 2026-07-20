@@ -9,7 +9,7 @@ public class GridSolverPlugin : BaseUnityPlugin
 {
     public const string PluginGUID = "sparroh.gridsolverplus";
     public const string PluginName = "GridSolverCoru";
-    public const string PluginVersion = "1.0.0";
+    public const string PluginVersion = "1.1.0";
 
     internal static ManualLogSource Logger;
     public static GridSolverPlugin Instance;

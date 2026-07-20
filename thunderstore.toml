@@ -2,10 +2,11 @@
 schemaVersion = "0.0.1"
 
 [package]
-namespace = "Sparroh"
-name = "GridSolverPlus"
-description = "Automatically place selected upgrades on the hex grid. Hover and press N to select, then Solve."
-websiteUrl = "https://github.com/Little-Sparroh/GridSolverPlus"
+namespace = "Coruscnium"
+name = "GridSolverCoru"
+versionNumber = "1.1.0"
+description = "Automatically place selected upgrades on the hex grid. Hover and press N to select, then Solve. Supports Boundary Incursion, Multiversal Thievery, Edge Fault, and Handheld Pocket Universe."
+websiteUrl = "https://github.com/coruscnium/GridSolverPlus"
 containsNsfwContent = false
 
 [package.dependencies]
@@ -19,8 +20,8 @@ readme = "README.md"
 outdir = "build"
 
 [[build.copy]]
-source = "bin/Release/net48/GridSolverPlus.dll"
-target = "BepInEx/plugins/GridSolverPlus.dll"
+source = "bin/Release/net48/GridSolverCoru.dll"
+target = "BepInEx/plugins/GridSolverCoru.dll"
 
 [[build.copy]]
 source = "CHANGELOG.md"
