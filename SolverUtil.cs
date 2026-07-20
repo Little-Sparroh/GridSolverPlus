@@ -102,6 +102,77 @@ public class Offset(int offsetX, int offsetY)
 
 public class Solver
 {
+    private static readonly HashSet<string> GridExpandingUpgradeNames = new()
+    {
+        "Boundary Incursion",
+        "Edge Fault",
+        "Multiversal Thievery"
+    };
+
+    private static readonly HashSet<string> MajorGridExpanderNames = new()
+    {
+        "Multiversal Thievery"
+    };
+
+    private static readonly HashSet<string> CellCountModifyingUpgradeNames = new()
+    {
+        "Handheld Pocket Universe"
+    };
+
+    private static bool HasName(Upgrade u) => u?.Name != null;
+    private static bool HasName(UpgradeInstance i) => i?.Upgrade?.Name != null;
+
+    internal static bool IsMajorGridExpander(Upgrade upgrade) =>
+        HasName(upgrade) && MajorGridExpanderNames.Contains(upgrade.Name);
+
+    internal static bool IsMajorGridExpander(UpgradeInstance inst) =>
+        HasName(inst) && MajorGridExpanderNames.Contains(inst.Upgrade.Name);
+
+    internal static bool IsGridExpander(Upgrade upgrade) =>
+        HasName(upgrade) && GridExpandingUpgradeNames.Contains(upgrade.Name);
+
+    internal static bool IsGridExpander(UpgradeInstance inst) =>
+        HasName(inst) && GridExpandingUpgradeNames.Contains(inst.Upgrade.Name);
+
+    internal static bool IsCellCountModifier(Upgrade upgrade) =>
+        HasName(upgrade) && CellCountModifyingUpgradeNames.Contains(upgrade.Name);
+
+    internal static bool IsCellCountModifier(UpgradeInstance inst) =>
+        HasName(inst) && CellCountModifyingUpgradeNames.Contains(inst.Upgrade.Name);
+
+    private static int GetEffectiveCellCount(UpgradeInstance upgrade, bool hasHPU)
+    {
+        int baseCount = upgrade.GetPattern().GetCellCount();
+        if (!hasHPU) return baseCount;
+        if (IsCellCountModifier(upgrade)) return baseCount;
+
+        string rarityName = upgrade.Upgrade.RarityName;
+        switch (rarityName)
+        {
+            case "Standard": return 1;
+            case "Rare":     return 2;
+            case "Epic":     return 3;
+            case "Exotic":   return 4;
+            default:         return baseCount;
+        }
+    }
+
+    internal static int GetPlacementPriority(UpgradeInstance inst)
+    {
+        if (IsMajorGridExpander(inst)) return 3;
+        if (IsGridExpander(inst))      return 2;
+        if (IsCellCountModifier(inst)) return 1;
+        return 0;
+    }
+
+    internal static int GetPlacementPriority(Upgrade upgrade)
+    {
+        if (IsMajorGridExpander(upgrade)) return 3;
+        if (IsGridExpander(upgrade))      return 2;
+        if (IsCellCountModifier(upgrade)) return 1;
+        return 0;
+    }
+
     private static FieldInfo? GetPrivateField(string name, System.Type type)
     {
         try
@@ -124,18 +195,69 @@ public class Solver
     private readonly IUpgradable _gear;
     private readonly ModuleEquipSlots _equipSlots;
     private readonly HexMap _hexMap;
-    private readonly int _maxRotations = PlayerData.Instance.canRotateUpgrades ? 6 : 1;
 
     private readonly Dictionary<Tuple<UpgradeInstance, int>, Offset> _offsetCache = new();
     private readonly Dictionary<UpgradeInstance, List<int>> _uniqueRotationsCache = new();
+    private readonly List<Tuple<UpgradeInstance, sbyte, sbyte, byte>> _previousLayout = new();
 
     private bool _foundSolution;
+
+    public string? FailureMessage { get; private set; }
+
+    private static int MaxRotationsFor(UpgradeInstance upgrade)
+    {
+        try
+        {
+            return PlayerData.Instance.CanRotateUpgrade(upgrade.Upgrade.Rarity) ? 6 : 1;
+        }
+        catch
+        {
+            return PlayerData.Instance.canRotateUpgrades ? 6 : 1;
+        }
+    }
+
+    internal static bool UpgradeBelongsToGear(IUpgradable gear, UpgradeInstance instance)
+    {
+        if (gear is null || instance is null) return false;
+
+        try
+        {
+            object owner = instance.Gear;
+            if (owner is not null)
+            {
+                if (ReferenceEquals(owner, gear)) return true;
+                if (gear.GearType == GearType.Character && ReferenceEquals(owner, Global.Instance)) return true;
+            }
+        }
+        catch { }
+
+        try
+        {
+            foreach (var inst in EnumerateInstances(gear))
+            {
+                if (ReferenceEquals(inst, instance) || inst.InstanceID == instance.InstanceID)
+                    return true;
+            }
+            return false;
+        }
+        catch
+        {
+            return true;
+        }
+    }
 
     public Solver(IUpgradeWindow upgradeWindow, IUpgradable gear, List<UpgradeInstance> upgrades)
     {
         _upgradeWindow = upgradeWindow;
-        _upgrades = upgrades;
         _gear = gear;
+
+        _upgrades = upgrades.Where(u =>
+        {
+            var ok = UpgradeBelongsToGear(gear, u);
+            if (!ok)
+                GridSolverPlugin.Logger.LogWarning($"Solver rejected '{u?.Upgrade?.Name}' — it does not belong to the target gear.");
+            return ok;
+        }).ToList();
         _equipSlots = GetPrivateField("equipSlots", upgradeWindow.GetType())?.GetValue(upgradeWindow) as ModuleEquipSlots;
 
         var hxmpField = GetPrivateField("hexMap", typeof(ModuleEquipSlots));
@@ -153,14 +275,6 @@ public class Solver
 
             _uniqueRotationsCache[upgrade] = GetUniqueRotations(upgrade);
         }
-
-        foreach (var kvp in canonicalPatterns)
-        {
-            if (kvp.Value.Count > 1)
-            {
-                var names = string.Join(", ", kvp.Value.Select(u => u.Upgrade.Name));
-            }
-        }
     }
 
     private List<int> GetUniqueRotations(UpgradeInstance upgrade)
@@ -168,8 +282,9 @@ public class Solver
         var pattern = upgrade.GetPattern();
         var canonicalMaps = new Dictionary<string, int>();
         var uniqueRotations = new List<int>();
+        var maxRotations = MaxRotationsFor(upgrade);
 
-        for (int rot = 0; rot < _maxRotations; rot++)
+        for (int rot = 0; rot < maxRotations; rot++)
         {
             var rotatedMap = pattern.GetModifiedMap(rot);
             var canonical = HexMapUtils.CanonicalizeHexMap(rotatedMap);
@@ -179,9 +294,6 @@ public class Solver
             {
                 canonicalMaps[key] = rot;
                 uniqueRotations.Add(rot);
-            }
-            else
-            {
             }
         }
 
@@ -239,32 +351,56 @@ public class Solver
         return new Offset(cell.X + baseOffset.OffsetX, cell.Y + baseOffset.OffsetY);
     }
 
-    private void ClearSlots()
+    internal static IEnumerable<UpgradeInstance> EnumerateInstances(IUpgradable gear)
     {
-        if (_equipSlots == null)
-        {
-            return;
-        }
+        var merged = new List<UpgradeInfo>(PlayerData.GetAllUpgrades(gear));
 
-        var prefab = _gear;
-
-        var gearUpgrades = PlayerData.GetAllUpgrades(prefab);
-
-        var playerUpgrades = new List<UpgradeInfo>();
-        if (prefab.GearType == GearType.Character)
+        if (gear.GearType == GearType.Character)
         {
             IUpgradable playerUpgradesPrefab = Global.Instance;
-            playerUpgrades = PlayerData.GetAllUpgrades(playerUpgradesPrefab);
+            merged.AddRange(PlayerData.GetAllUpgrades(playerUpgradesPrefab));
         }
 
-        var allUpgrades = gearUpgrades.Concat(playerUpgrades).Where(u => u is not null);
-        foreach (var upgradeInfo in allUpgrades)
+        foreach (var upgradeInfo in merged)
         {
-            if (upgradeInfo.Instances is null) continue;
-            foreach (var upgradeInstance in upgradeInfo.Instances.OfType<UpgradeInstance>())
-            {
-                _equipSlots.Unequip(prefab, upgradeInstance);
-            }
+            if (upgradeInfo?.Instances is null) continue;
+            foreach (var upgradeInstance in upgradeInfo.Instances.OfType<UpgradeInstance>().ToList())
+                yield return upgradeInstance;
+        }
+    }
+
+    private void SnapshotEquipped()
+    {
+        _previousLayout.Clear();
+        foreach (var inst in _upgrades)
+        {
+            if (!inst.IsEquipped(_gear)) continue;
+            if (inst.GetPosition(_gear, out sbyte x, out sbyte y))
+                _previousLayout.Add(new Tuple<UpgradeInstance, sbyte, sbyte, byte>(inst, x, y, inst.GetRotation(_gear)));
+        }
+
+        // Major expanders (MT) first, then minor expanders (BI/EF), then HPU, then normal.
+        _previousLayout.Sort((a, b) =>
+            GetPlacementPriority(b.Item1).CompareTo(GetPlacementPriority(a.Item1)));
+    }
+
+    private void RestoreEquipped()
+    {
+        if (_equipSlots == null) return;
+        foreach (var entry in _previousLayout)
+        {
+            if (!_equipSlots.EquipModule(_gear, entry.Item1, entry.Item2, entry.Item3, entry.Item4, true))
+                GridSolverPlugin.Logger.LogWarning($"Could not restore '{entry.Item1.Upgrade.Name}' to its previous slot.");
+        }
+    }
+
+    private void ClearSlots()
+    {
+        if (_equipSlots == null) return;
+
+        foreach (var upgradeInstance in _upgrades.OrderBy(i => GetPlacementPriority(i)))
+        {
+            _equipSlots.Unequip(_gear, upgradeInstance);
         }
     }
 
@@ -313,16 +449,34 @@ public class Solver
     {
         yield return SolveDfs(0);
 
+        if (!_foundSolution)
+        {
+            FailureMessage = "No valid arrangement found for the selected upgrades. Your previous layout has been restored — deselect one or more upgrades and try again.";
+            RestoreEquipped();
+        }
+
         onComplete.Invoke(_foundSolution);
     }
 
     public void TrySolve(Action<bool> onComplete)
     {
         _foundSolution = false;
+        FailureMessage = null;
+
+        if (_upgrades.Count == 0)
+        {
+            FailureMessage = "None of the selected upgrades belong to this gear.";
+            onComplete.Invoke(false);
+            return;
+        }
+
+        SnapshotEquipped();
         ClearSlots();
 
         if (!CanFitAll())
         {
+            FailureMessage = "The selected upgrades cannot fit in the available space. Your previous layout has been restored.";
+            RestoreEquipped();
             onComplete.Invoke(false);
             return;
         }
@@ -330,65 +484,126 @@ public class Solver
         UpgradeSolver.Instance.SolverCoroutine = GridSolverPlugin.Instance.StartCoroutine(SolveAndNotify(onComplete));
     }
 
+    public void AbortAndRestore()
+    {
+        if (_equipSlots == null) return;
+        foreach (var upgrade in _upgrades.OrderBy(u => GetPlacementPriority(u)))
+            _equipSlots.Unequip(_gear, upgrade);
+        RestoreEquipped();
+    }
+
     public bool CanFitAll()
     {
         if (_hexMap == null)
-        {
             return true;
-        }
 
-        var boundary = _upgrades.FirstOrDefault(u => u.Upgrade.Name == "Boundary Incursion");
-        if (boundary != null)
+        bool hasHPU = _upgrades.Any(u => IsCellCountModifier(u));
+        var expanders = _upgrades.Where(u => IsGridExpander(u)).ToList();
+        var cellModifiers = _upgrades.Where(u => IsCellCountModifier(u)).ToList();
+        var normal = _upgrades.Where(u => !IsGridExpander(u) && !IsCellCountModifier(u)).ToList();
+
+        // Phase 1: Place all grid-expanders (major first via DFS sort, but here
+        // the loop order IS the sort order — major expanders are placed first)
+        foreach (var expander in expanders)
         {
-            bool boundaryPlaced = false;
+            bool placed = false;
             var originalHeight = _hexMapHeightField != null ? (int)_hexMapHeightField.GetValue(_hexMap) : 8;
-            var originalWidth = _hexMapWidthField != null ? (int)_hexMapWidthField.GetValue(_hexMap) : 8;
+            var originalWidth  = _hexMapWidthField  != null ? (int)_hexMapWidthField .GetValue(_hexMap) : 8;
+            var uniqueRots = _uniqueRotationsCache.TryGetValue(expander, out var rots)
+                ? rots : new List<int> { 0 };
 
-            for (int y = 0; y < originalHeight && !boundaryPlaced; y++)
+            for (int y = 0; y < originalHeight && !placed; y++)
+            for (int x = 0; x < originalWidth && !placed; x++)
+            foreach (var rot in uniqueRots)
             {
-                for (int x = 0; x < originalWidth && !boundaryPlaced; x++)
+                UpgradeEquipCell cell = null;
+                try { cell = _equipSlots.GetCell(x, y); } catch { }
+                if (cell == null || cell.Upgrade != null) continue;
+
+                var offset = GetOffsetsCached(expander, rot, cell);
+                if (_equipSlots.EquipModule(_gear, expander,
+                        offset.OffsetX, offset.OffsetY, (byte)rot, true))
                 {
-                    var uniqueRots = _uniqueRotationsCache.ContainsKey(boundary) ? _uniqueRotationsCache[boundary] : new List<int> { 0 };
-                    foreach (var rot in uniqueRots)
-                    {
-                        UpgradeEquipCell cell = null;
-                        try { cell = _equipSlots.GetCell(x, y); } catch { }
-                        if (cell != null && cell.Upgrade == null)
-                        {
-                            var offset = GetOffsetsCached(boundary, rot, cell);
-                            if (_equipSlots.EquipModule(_gear, boundary, offset.OffsetX, offset.OffsetY, (byte)rot, true))
-                            {
-                                boundaryPlaced = true;
-                                break;
-                            }
-                        }
-                    }
+                    placed = true;
+                    break;
                 }
             }
 
-            if (!boundaryPlaced)
+            if (!placed)
             {
+                foreach (var pe in expanders)
+                {
+                    if (ReferenceEquals(pe, expander)) break;
+                    _equipSlots.Unequip(_gear, pe);
+                }
                 return false;
             }
-
-            var newHeight = _hexMapHeightField != null ? (int)_hexMapHeightField.GetValue(_hexMap) : 8;
-            var newWidth = _hexMapWidthField != null ? (int)_hexMapWidthField.GetValue(_hexMap) : 8;
-            var newGridCells = newHeight * newWidth;
-
-            var sumOthers = _upgrades.Where(u => u != boundary).Select(u => u.GetPattern().GetCellCount()).Sum();
-            bool canFit = sumOthers <= newGridCells;
-
-            _equipSlots.Unequip(_gear, boundary);
-
-            return canFit;
         }
-        else
+
+        // Phase 2: Place cell-count modifiers (HPU)
+        foreach (var mod in cellModifiers)
         {
-            var height = _hexMapHeightField != null ? (int)_hexMapHeightField.GetValue(_hexMap) : 8;
-            var width = _hexMapWidthField != null ? (int)_hexMapWidthField.GetValue(_hexMap) : 8;
-            var gridCells = height * width;
-            var sumOfPatternCells = _upgrades.Select(u => u.GetPattern().GetCellCount()).Sum();
-            return sumOfPatternCells <= gridCells;
+            bool placed = false;
+            var currentHeight = _hexMapHeightField != null ? (int)_hexMapHeightField.GetValue(_hexMap) : 8;
+            var currentWidth  = _hexMapWidthField  != null ? (int)_hexMapWidthField .GetValue(_hexMap) : 8;
+            var uniqueRots = _uniqueRotationsCache.TryGetValue(mod, out var rots)
+                ? rots : new List<int> { 0 };
+
+            for (int y = 0; y < currentHeight && !placed; y++)
+            for (int x = 0; x < currentWidth && !placed; x++)
+            foreach (var rot in uniqueRots)
+            {
+                UpgradeEquipCell cell = null;
+                try { cell = _equipSlots.GetCell(x, y); } catch { }
+                if (cell == null || cell.Upgrade != null) continue;
+
+                var offset = GetOffsetsCached(mod, rot, cell);
+                if (_equipSlots.EquipModule(_gear, mod,
+                        offset.OffsetX, offset.OffsetY, (byte)rot, true))
+                {
+                    placed = true;
+                    break;
+                }
+            }
+
+            if (!placed)
+            {
+                foreach (var pe in expanders)
+                    _equipSlots.Unequip(_gear, pe);
+                foreach (var pm in cellModifiers)
+                {
+                    if (ReferenceEquals(pm, mod)) break;
+                    _equipSlots.Unequip(_gear, pm);
+                }
+                return false;
+            }
         }
+
+        // Phase 3: Count unoccupied cells
+        var height = _hexMapHeightField != null ? (int)_hexMapHeightField.GetValue(_hexMap) : 8;
+        var width  = _hexMapWidthField  != null ? (int)_hexMapWidthField .GetValue(_hexMap) : 8;
+        int unoccupied = 0;
+        for (int y = 0; y < height; y++)
+        for (int x = 0; x < width; x++)
+        {
+            try
+            {
+                var cell = _equipSlots.GetCell(x, y);
+                if (cell != null && cell.Upgrade == null)
+                    unoccupied++;
+            }
+            catch { }
+        }
+
+        // Phase 4: Sum inflated cell counts
+        var sumOfPatternCells = normal.Select(u => GetEffectiveCellCount(u, hasHPU)).Sum();
+
+        // Cleanup
+        foreach (var pe in expanders)
+            _equipSlots.Unequip(_gear, pe);
+        foreach (var pm in cellModifiers)
+            _equipSlots.Unequip(_gear, pm);
+
+        return sumOfPatternCells <= unoccupied;
     }
 }
